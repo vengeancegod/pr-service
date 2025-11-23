@@ -105,7 +105,7 @@ func (r *repository) GetPRByReviewerID(ctx context.Context, reviewerID string) (
 	var prs []model.PullRequest
 	for rows.Next() {
 		var pr model.PullRequest
-		err := rows.Scan(&pr.ID, &pr.NamePR, &pr.Status, &pr.AuthorID,)
+		err := rows.Scan(&pr.ID, &pr.NamePR, &pr.Status, &pr.AuthorID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan PR: %w", err)
 		}

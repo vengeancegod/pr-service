@@ -14,6 +14,8 @@ require (
 	go.opentelemetry.io/otel/trace v1.38.0
 )
 
+require github.com/pkg/errors v0.9.1 // indirect
+
 require (
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/fatih/color v1.18.0 // indirect
@@ -24,6 +26,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgx v3.6.2+incompatible
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-colorable v0.1.13 // indirect

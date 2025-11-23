@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"pr-service/internal/model"
@@ -23,80 +24,49 @@ func NewRepository(pool *pgxpool.Pool) *repository {
 }
 
 func (r *repository) CreateTeam(ctx context.Context, team *model.Team) error {
-	query := "INSERT INTO teams (id, team_name) VALUES ($1, $2)"
+	query := "INSERT INTO teams (team_name) VALUES ($1)"
 
-	_, err := r.pool.Exec(ctx, query, team.ID, team.TeamName)
+	_, err := r.pool.Exec(ctx, query, team.TeamName)
 	if err != nil {
 		return fmt.Errorf("failed to create team: %w", err)
 	}
 	return nil
 }
 
-func (r *repository) UpdateTeam(ctx context.Context, team *model.Team) error {
-	query := "UPDATE teams SET team_name = $2 WHERE id = $1"
+func (r *repository) GetTeamByName(ctx context.Context, teamName string) (*model.Team, error) {
+	query := "SELECT team_name FROM teams WHERE team_name = $1"
 
-	ct, err := r.pool.Exec(ctx, query, team.ID, team.TeamName)
+	var team model.Team
+	err := r.pool.QueryRow(ctx, query, teamName).Scan(&team.TeamName)
 	if err != nil {
-		return fmt.Errorf("failed to update team: %w", err)
+		if err == pgx.ErrNoRows {
+			return nil, fmt.Errorf("team not found: %s", teamName)
+		}
+		return nil, fmt.Errorf("failed to get team: %w", err)
 	}
-	if ct.RowsAffected() == 0 {
-		return fmt.Errorf("team not found: %s", team.ID)
-	}
-	return nil
-}
 
-func (r *repository) DeleteTeam(ctx context.Context, id string) error {
-	query := `DELETE FROM teams WHERE id = $1`
-
-	ct, err := r.pool.Exec(ctx, query, id)
+	// получаем участников команды
+	membersQuery := "SELECT id, username, is_active, team_name FROM users WHERE team_name = $1"
+	rows, err := r.pool.Query(ctx, membersQuery, team.TeamName)
 	if err != nil {
-		return fmt.Errorf("failed to delete team: %w", err)
+		return nil, fmt.Errorf("failed to get team members: %w", err)
+	}
+	defer rows.Close()
+
+	var members []model.User
+	for rows.Next() {
+		var user model.User
+		err := rows.Scan(&user.ID, &user.Username, &user.IsActive, &user.TeamName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan member: %w", err)
+		}
+		members = append(members, user)
 	}
 
-	if ct.RowsAffected() == 0 {
-		return fmt.Errorf("team not found: %s", id)
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
-	return nil
-}
-
-func (r *repository) AddMemberInTeam(ctx context.Context, teamID, userID string) error {
-	var exists bool
-	checkQuery := "SELECT EXISTS(SELECT 1 FROM teams WHERE id = $1)"
-
-	err := r.pool.QueryRow(ctx, checkQuery, teamID).Scan(&exists)
-	if err != nil {
-		return fmt.Errorf("failed to check team existence: %w", err)
-	}
-	if !exists {
-		return fmt.Errorf("team not found: %s", teamID)
-	}
-
-	query := "UPDATE users SET team_id = $1 WHERE id = $2"
-
-	ct, err := r.pool.Exec(ctx, query, teamID, userID)
-	if err != nil {
-		return fmt.Errorf("failed to add member to team: %w", err)
-	}
-
-	if ct.RowsAffected() == 0 {
-		return fmt.Errorf("user not found: %s", userID)
-	}
-
-	return nil
-}
-
-func (r *repository) RemoveMember(ctx context.Context, teamID, userID string) error {
-	query := "UPDATE users SET team_id = '' WHERE id = $1 AND team_id = $2"
-
-	ct, err := r.pool.Exec(ctx, query, userID, teamID)
-	if err != nil {
-		return fmt.Errorf("failed to remove member from team: %w", err)
-	}
-
-	if ct.RowsAffected() == 0 {
-		return fmt.Errorf("user not found in team: user_id=%s, team_id=%s", userID, teamID)
-	}
-
-	return nil
+	team.Members = members
+	return &team, nil
 }

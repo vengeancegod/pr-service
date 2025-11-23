@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/google/uuid"
-
 	"pr-service/internal/model"
 )
 
-func (s *service) CreatePR(ctx context.Context, namePR, authorID string) (*model.PullRequest, error) {
+func (s *service) CreatePR(ctx context.Context, prID, namePR, authorID string) (*model.PullRequest, error) {
 	if namePR == "" {
 		return nil, fmt.Errorf("PR name is required")
 	}
@@ -24,7 +22,7 @@ func (s *service) CreatePR(ctx context.Context, namePR, authorID string) (*model
 	}
 
 	// активные членды команды автора пра
-	activeMembers, err := s.userRepository.GetActiveUserFromTeam(ctx, author.TeamID)
+	activeMembers, err := s.userRepository.GetActiveUserFromTeam(ctx, author.TeamName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active team members: %w", err)
 	}
@@ -33,7 +31,7 @@ func (s *service) CreatePR(ctx context.Context, namePR, authorID string) (*model
 	reviewers := selectReviewers(activeMembers, authorID, 2)
 
 	pr := &model.PullRequest{
-		ID:        uuid.New().String(),
+		ID:        prID,
 		NamePR:    namePR,
 		Status:    model.PRStatusOpen,
 		AuthorID:  authorID,
@@ -63,54 +61,61 @@ func (s *service) GetPRByReviewerID(ctx context.Context, reviewerID string) ([]m
 	return s.prRepository.GetPRByReviewerID(ctx, reviewerID)
 }
 
-func (s *service) ReplaceReviewer(ctx context.Context, prID, oldReviewerID, newReviewerID string) error {
+func (s *service) ReplaceReviewer(ctx context.Context, prID, oldReviewerID string) (*model.PullRequest, string, error) {
 	if prID == "" {
-		return fmt.Errorf("PR ID is required")
+		return nil, "", fmt.Errorf("PR ID is required")
 	}
 	if oldReviewerID == "" {
-		return fmt.Errorf("old reviewer ID is required")
+		return nil, "", fmt.Errorf("old reviewer ID is required")
 	}
 
 	pr, err := s.prRepository.GetPRByPRID(ctx, prID)
 	if err != nil {
-		return fmt.Errorf("failed to get PR: %w", err)
+		return nil, "", fmt.Errorf("failed to get PR: %w", err)
 	}
 
 	// проверка на мерж
 	if pr.IsMerged() {
-		return fmt.Errorf("cannot replace reviewer: PR is already merged")
+		return nil, "", fmt.Errorf("cannot replace reviewer: PR is already merged")
 	}
 
 	// проверка что прежний ревьюер действительно ревьювер этого PR
 	if !pr.HasReviewer(oldReviewerID) {
-		return fmt.Errorf("user %s is not a reviewer of PR %s", oldReviewerID, prID)
+		return nil, "", fmt.Errorf("user %s is not a reviewer of PR %s", oldReviewerID, prID)
 	}
 
 	oldReviewer, err := s.userRepository.GetUserByID(ctx, oldReviewerID)
 	if err != nil {
-		return fmt.Errorf("failed to get old reviewer: %w", err)
+		return nil, "", fmt.Errorf("failed to get old reviewer: %w", err)
 	}
 
 	// активные члены команды предыдущего ревьювера
-	activeMembers, err := s.userRepository.GetActiveUserFromTeam(ctx, oldReviewer.TeamID)
+	activeMembers, err := s.userRepository.GetActiveUserFromTeam(ctx, oldReviewer.TeamName)
 	if err != nil {
-		return fmt.Errorf("failed to get active team members: %w", err)
+		return nil, "", fmt.Errorf("failed to get active team members: %w", err)
 	}
+
 	// исключение автора и всех текущих ревьюеров
 	excludeIDs := append(pr.Reviewers, pr.AuthorID)
 	candidates := filterCandidates(activeMembers, excludeIDs)
 
 	if len(candidates) == 0 {
-		return fmt.Errorf("no available candidates for replacement")
+		return nil, "", fmt.Errorf("no available candidates for replacement")
 	}
 
 	newReviewer := candidates[rand.Intn(len(candidates))]
+	newReviewerID := newReviewer.ID
 
-	if err := s.prRepository.ReplaceReviewer(ctx, prID, oldReviewerID, newReviewer.ID); err != nil {
-		return fmt.Errorf("failed to replace reviewer: %w", err)
+	if err := s.prRepository.ReplaceReviewer(ctx, prID, oldReviewerID, newReviewerID); err != nil {
+		return nil, "", fmt.Errorf("failed to replace reviewer: %w", err)
 	}
 
-	return nil
+	updatedPR, err := s.prRepository.GetPRByPRID(ctx, prID)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to get updated PR: %w", err)
+	}
+
+	return updatedPR, newReviewerID, nil
 }
 
 func (s *service) Merge(ctx context.Context, prID string) (*model.PullRequest, error) {

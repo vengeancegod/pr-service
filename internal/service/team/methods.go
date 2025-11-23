@@ -8,50 +8,41 @@ import (
 )
 
 func (s *service) CreateTeam(ctx context.Context, team *model.Team) error {
-	if team.ID == "" {
-		return fmt.Errorf("team ID is required")
-	}
-	if team.TeamName == "" {
-		return fmt.Errorf("team name is required")
+	err := s.teamRepository.CreateTeam(ctx, team)
+	if err != nil {
+		return fmt.Errorf("failed to create team: %w", err)
 	}
 
-	return s.teamRepository.CreateTeam(ctx, team)
+	for i := range team.Members {
+		user := &team.Members[i]
+		user.TeamName = team.TeamName
+
+		err := s.userRepository.CreateUser(ctx, user)
+		if err != nil {
+			return fmt.Errorf("failed to create user %s: %w", user.ID, err)
+		}
+	}
+
+	return nil
 }
 
-func (s *service) UpdateTeam(ctx context.Context, team *model.Team) error {
-	if team.ID == "" {
-		return fmt.Errorf("team ID is required")
+func (s *service) GetTeamByName(ctx context.Context, teamName string) (*model.Team, error) {
+	if teamName == "" {
+		return nil, fmt.Errorf("team name is required")
 	}
 
-	return s.teamRepository.UpdateTeam(ctx, team)
+	return s.teamRepository.GetTeamByName(ctx, teamName)
 }
 
-func (s *service) DeleteTeam(ctx context.Context, id string) error {
-	if id == "" {
-		return fmt.Errorf("team ID is required")
+func (s *service) GetActiveTeamMembers(ctx context.Context, teamName string) ([]model.User, error) {
+	if teamName == "" {
+		return nil, fmt.Errorf("team name is required")
 	}
 
-	return s.teamRepository.DeleteTeam(ctx, id)
-}
-
-func (s *service) AddMemberInTeam(ctx context.Context, teamID, userID string) error {
-	if teamID == "" {
-		return fmt.Errorf("team ID is required")
-	}
-	if userID == "" {
-		return fmt.Errorf("user ID is required")
+	_, err := s.teamRepository.GetTeamByName(ctx, teamName)
+	if err != nil {
+		return nil, fmt.Errorf("team not found: %w", err)
 	}
 
-	return s.teamRepository.AddMemberInTeam(ctx, teamID, userID)
-}
-
-func (s *service) RemoveMember(ctx context.Context, teamID, userID string) error {
-	if teamID == "" {
-		return fmt.Errorf("team ID is required")
-	}
-	if userID == "" {
-		return fmt.Errorf("user ID is required")
-	}
-
-	return s.teamRepository.RemoveMember(ctx, teamID, userID)
+	return s.userRepository.GetActiveUserFromTeam(ctx, teamName)
 }

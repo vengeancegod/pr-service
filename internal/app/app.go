@@ -55,8 +55,8 @@ func (a *App) initServiceProvider(_ context.Context) error {
 	return nil
 }
 
-func (a *App) initHTTPServer(_ context.Context) error {
-	router := a.setupRouter()
+func (a *App) initHTTPServer(ctx context.Context) error {
+	router := a.setupRouter(ctx)
 	a.server = &http.Server{
 		Addr:    a.serviceProvider.HTTPConfig().Address(),
 		Handler: router,
@@ -64,14 +64,24 @@ func (a *App) initHTTPServer(_ context.Context) error {
 	return nil
 }
 
-func (a *App) setupRouter() http.Handler {
-    // Генератор создаёт функцию NewRouter(...)
-    return openapi.NewRouter(
-        openapi.NewStrictHandler(
-            a.serviceProvider.Controllers(),
-            nil, // сюда можно передавать middleware from generator
-        ),
-    )
+func (a *App) setupRouter(ctx context.Context) *http.ServeMux {
+	mux := http.NewServeMux()
+
+	userHandler := a.serviceProvider.UserHandler(ctx)
+	teamHandler := a.serviceProvider.TeamHandler(ctx)
+	prHandler := a.serviceProvider.PullRequestHandler(ctx)
+
+	mux.HandleFunc("POST /team/add", teamHandler.AddTeam)
+	mux.HandleFunc("GET /team/get", teamHandler.GetTeam)
+
+	mux.HandleFunc("POST /users/setIsActive", userHandler.SetIsActive)
+	mux.HandleFunc("GET /users/getReview", userHandler.GetUserReviewRequests)
+
+	mux.HandleFunc("POST /pullRequest/create", prHandler.CreatePR)
+	mux.HandleFunc("POST /pullRequest/merge", prHandler.MergePR)
+	mux.HandleFunc("POST /pullRequest/replace", prHandler.ReplaceReviewer)
+
+	return mux
 }
 
 func (a *App) runHTTPServer() error {

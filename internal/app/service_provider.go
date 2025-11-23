@@ -6,9 +6,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"pr-service/internal/api/handlers"
 	"pr-service/internal/config/db"
 	"pr-service/internal/config/server"
-	"pr-service/internal/db"
+	infra "pr-service/internal/db"
 	"pr-service/internal/repository"
 	prRepo "pr-service/internal/repository/pullrequest"
 	teamRepo "pr-service/internal/repository/team"
@@ -33,9 +34,9 @@ type serviceProvider struct {
 	teamService service.TeamService
 	prService   service.PullRequestService
 
-	// userHandler *handler.UserHandler
-	// teamHandler *handler.TeamHandler
-	// prHandler   *handler.PRHandler
+	userHandler *handlers.UserHandler
+	teamHandler *handlers.TeamHandler
+	prHandler   *handlers.PullRequestHandler
 }
 
 func newServiceProvider() *serviceProvider {
@@ -109,6 +110,7 @@ func (s *serviceProvider) TeamService(ctx context.Context) service.TeamService {
 	if s.teamService == nil {
 		s.teamService = teamService.NewService(
 			s.TeamRepository(ctx),
+			s.UserRepository(ctx),
 		)
 	}
 	return s.teamService
@@ -124,7 +126,28 @@ func (s *serviceProvider) PRService(ctx context.Context) service.PullRequestServ
 	return s.prService
 }
 
+func (s *serviceProvider) UserHandler(ctx context.Context) *handlers.UserHandler {
+	if s.userHandler == nil {
+		s.userHandler = handlers.NewUserHandler(s.UserService(ctx), s.PRService(ctx))
+	}
 
+	return s.userHandler
+}
+
+func (s *serviceProvider) TeamHandler(ctx context.Context) *handlers.TeamHandler {
+	if s.teamHandler == nil {
+		s.teamHandler = handlers.NewTeamHandler(s.TeamService(ctx))
+	}
+
+	return s.teamHandler
+}
+
+func (s *serviceProvider) PullRequestHandler(ctx context.Context) *handlers.PullRequestHandler {
+	if s.prHandler == nil {
+		s.prHandler = handlers.NewPullRequestHandler(s.PRService(ctx))
+	}
+	return s.prHandler
+}
 
 func (s *serviceProvider) Close() {
 	if s.db != nil {

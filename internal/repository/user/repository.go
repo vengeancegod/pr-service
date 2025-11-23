@@ -23,9 +23,9 @@ func NewRepository(pool *pgxpool.Pool) *repository {
 }
 
 func (r *repository) CreateUser(ctx context.Context, user *model.User) error {
-	query := "INSERT INTO users (id, user_name, is_active, team_id) VALUES ($1, $2, $3, $4)"
+	query := "INSERT INTO users (id, username, is_active, team_name) VALUES ($1, $2, $3, $4)"
 
-	_, err := r.pool.Exec(ctx, query, user.ID, user.UserName, user.IsActive, user.TeamID)
+	_, err := r.pool.Exec(ctx, query, user.ID, user.Username, user.IsActive, user.TeamName)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
@@ -34,10 +34,10 @@ func (r *repository) CreateUser(ctx context.Context, user *model.User) error {
 }
 
 func (r *repository) GetUserByID(ctx context.Context, id string) (*model.User, error) {
-	query := "SELECT id, user_name, is_active, team_id FROM users WHERE id = $1"
+	query := "SELECT id, username, is_active, team_name FROM users WHERE id = $1"
 
 	var user model.User
-	err := r.pool.QueryRow(ctx, query, id).Scan(&user.ID, &user.UserName, &user.IsActive, &user.TeamID)
+	err := r.pool.QueryRow(ctx, query, id).Scan(&user.ID, &user.Username, &user.IsActive, &user.TeamName)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, fmt.Errorf("user not found: %s", id)
@@ -48,9 +48,9 @@ func (r *repository) GetUserByID(ctx context.Context, id string) (*model.User, e
 }
 
 func (r *repository) UpdateUser(ctx context.Context, user *model.User) error {
-	query := "UPDATE users SET user_name = $2, is_active = $3, team_id = $4 WHERE id = $1"
+	query := "UPDATE users SET username = $2, is_active = $3, team_name = $4 WHERE id = $1"
 
-	ct, err := r.pool.Exec(ctx, query, user.ID, user.UserName, user.IsActive, user.TeamID)
+	ct, err := r.pool.Exec(ctx, query, user.ID, user.Username, user.IsActive, user.TeamName)
 	if err != nil {
 		return fmt.Errorf("failed to update user: %w", err)
 	}
@@ -61,23 +61,9 @@ func (r *repository) UpdateUser(ctx context.Context, user *model.User) error {
 	return nil
 }
 
-func (r *repository) DeleteUser(ctx context.Context, id string) error {
-	query := "DELETE FROM users WHERE id = $1"
-
-	ct, err := r.pool.Exec(ctx, query, id)
-	if err != nil {
-		return fmt.Errorf("failed to delete user: %w", err)
-	}
-
-	if ct.RowsAffected() == 0 {
-		return fmt.Errorf("user not found: %s", id)
-	}
-	return nil
-}
-
-func (r *repository) GetActiveUserFromTeam(ctx context.Context, teamID string) ([]model.User, error) {
-	query := "SELECT id, user_name, is_active, team_id FROM users WHERE team_id = $1 AND is_active = true"
-	rows, err := r.pool.Query(ctx, query, teamID)
+func (r *repository) GetActiveUserFromTeam(ctx context.Context, teamName string) ([]model.User, error) {
+	query := "SELECT id, username, is_active, team_name FROM users WHERE team_name = $1 AND is_active = true"
+	rows, err := r.pool.Query(ctx, query, teamName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active users: %w", err)
 	}
@@ -86,7 +72,7 @@ func (r *repository) GetActiveUserFromTeam(ctx context.Context, teamID string) (
 	var users []model.User
 	for rows.Next() {
 		var user model.User
-		err := rows.Scan(&user.ID, &user.UserName, &user.IsActive, &user.TeamID)
+		err := rows.Scan(&user.ID, &user.Username, &user.IsActive, &user.TeamName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
