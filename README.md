@@ -111,6 +111,20 @@ curl -X POST http://localhost:8080/pullRequest/merge \
     "pull_request_id": "pr-1001"
   }'
 ```
+Получение PR'а для ревьюера:
+```bash
+curl "http://localhost:8080/users/getReview?user_id=u3"
+```
+
+Изменение активности юзера:
+```bash
+curl -X POST http://localhost:8080/users/setIsActive \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "u3",
+    "is_active": false
+  }'
+  ```
 
 Попытка переназначить смерженный PR:
 ```bash
@@ -122,3 +136,4 @@ curl -X POST http://localhost:8080/pullRequest/replace   -H "Content-Type: appli
 
 При разработке сервиса, попытался впервые использовать кодген с помощью Ogen. Генерация файлов прошла успешно, однако возникли большие сложности с точки зрения архитектуры, поэтому решил обойтись без кодогенерации.
 Разработка велась с помощью net/http в соответствии со специффикацией openapi.yml.
+
